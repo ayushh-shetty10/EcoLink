@@ -1,0 +1,38 @@
+{
+  "name": "ecolink",
+  "slug": "ecolink",
+  "version": "1.0.0",
+  "assetBundlePatterns": [
+    "**/*"
+  ],
+  "ios": {
+    "supportsTabletMode": true
+  },
+  "android": {
+    "permissions": [
+      "CAMERA",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE"
+    ]
+  },
+  "web": {
+    "favicon": "./assets/favicon.png"
+  },
+  "plugins": [
+    [
+      "expo-camera",
+      {
+        "cameraPermission": "Allow EcoLink to access your camera to capture e-waste images.",
+        "microphonePermission": false,
+        "recordAudioAndroid": false
+      }
+    ],
+    [
+      "expo-image-picker",
+      {
+        "photosPermission": "Allow EcoLink to access your photos to upload e-waste images.",
+        "cameraPermission": "Allow EcoLink to use your camera."
+      }
+    ]
+  ]
+}
