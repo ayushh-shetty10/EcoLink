@@ -24,17 +24,28 @@ const InstitutionDashboardScreen = ({ navigation }) => {
   const [togglingActive, setTogglingActive] = useState(false);
 
   const loadData = async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.warn('[InstitutionDashboardScreen] No user ID found in session');
+      return;
+    }
 
+    console.log('[InstitutionDashboardScreen] Loading dashboard data for institution user ID:', user.id);
     const [institutionRes, requestsRes] = await Promise.all([
       institutionService.getInstitutionById(user.id),
       pickupRequestService.listPickupRequestsByInstitution(user.id),
     ]);
 
-    if (!institutionRes?.error) {
+    if (institutionRes?.error) {
+      console.error('[InstitutionDashboardScreen] Error fetching institution profile:', institutionRes.error);
+    } else {
+      console.log('[InstitutionDashboardScreen] Institution profile loaded successfully:', institutionRes.data);
       setInstitution(institutionRes.data || null);
     }
-    if (!requestsRes?.error) {
+
+    if (requestsRes?.error) {
+      console.error('[InstitutionDashboardScreen] Error fetching pickup requests:', requestsRes.error);
+    } else {
+      console.log(`[InstitutionDashboardScreen] Pickup requests loaded successfully. Count: ${requestsRes.data?.length}`, requestsRes.data);
       setRequests(requestsRes.data || []);
     }
   };

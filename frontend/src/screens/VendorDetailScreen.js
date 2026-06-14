@@ -1,21 +1,61 @@
 import React, { useState } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Button from '../components/Button';
 import { Card } from '../components/Cards';
 import { Container, Spacer } from '../components/Layout';
 import { colors, spacing } from '../constants';
+import pickupRequestService from '../services/pickupRequestService';
 
 const VendorDetailScreen = ({ route, navigation }) => {
-  const { vendor } = route.params;
+  const { vendor, fromRoute } = route.params;
+  // pickupPayload is passed from AddWasteScreen when the user is doing a recycle pickup
+  const pickupPayload = route.params?.pickupPayload || null;
+
   const [requestSent, setRequestSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const canCall = !!vendor.phone && vendor.phone !== 'Not available';
   const canEmail = !!vendor.email;
 
-  const handleRequestPickup = () => {
-    setRequestSent(true);
-    alert('Pickup request sent. Vendor will contact you soon.');
+  const handleRequestPickup = async () => {
+    if (pickupPayload) {
+      // User came from AddWasteScreen (Recycle flow) — create a real DB row
+      setSubmitting(true);
+      console.log('[VendorDetailScreen] Creating pickup request for institution:', vendor.id, vendor.name);
+      try {
+        const payload = {
+          ...pickupPayload,
+          institution_id: vendor.id,
+        };
+        // Remove 'points' from the DB payload — it's only used for UI
+        delete payload.points;
+
+        console.log('[VendorDetailScreen] Inserting pickup request payload:', payload);
+        const res = await pickupRequestService.createPickupRequest(payload);
+        if (res.error) {
+          console.error('[VendorDetailScreen] Pickup request DB insert failed:', res.error);
+          Alert.alert('Error', res.error.message || 'Failed to send pickup request. Please try again.');
+        } else {
+          console.log('[VendorDetailScreen] Pickup request created successfully:', res.data);
+          setRequestSent(true);
+          Alert.alert(
+            'Pickup Request Sent! ✅',
+            `Your request has been sent to ${vendor.name}.\n\nYou earned ${pickupPayload.points || 5} points!`
+          );
+        }
+      } catch (e) {
+        console.error('[VendorDetailScreen] Exception during pickup request creation:', e);
+        Alert.alert('Error', e?.message || 'Failed to send pickup request. Please try again.');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      // Non-recycle flow (Donate/Sell) — no DB row needed yet (future marketplace)
+      setRequestSent(true);
+      Alert.alert('Request Sent', `${vendor.name} will contact you soon.`);
+    }
   };
+
 
   return (
     <ScrollView
@@ -133,9 +173,10 @@ const VendorDetailScreen = ({ route, navigation }) => {
         <Spacer size="xl" />
 
         <Button
-          title={requestSent ? 'Request Sent' : 'Request Pickup'}
+          title={requestSent ? '✅ Request Sent' : submitting ? 'Sending...' : 'Request Pickup'}
           onPress={handleRequestPickup}
-          disabled={requestSent}
+          disabled={requestSent || submitting}
+          loading={submitting}
           size="large"
         />
 

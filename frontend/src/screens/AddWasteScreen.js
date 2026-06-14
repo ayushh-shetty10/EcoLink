@@ -6,8 +6,7 @@ import { Dropdown, Input } from '../components/Input';
 import { Container, Spacer } from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
-import institutionService from '../services/institutionService';
-import pickupRequestService from '../services/pickupRequestService';
+
 import imageService from '../services/imageService';
 import { actions, colors, conditions, spacing, wasteCategories } from '../constants';
 
@@ -87,72 +86,55 @@ const AddWasteScreen = ({ navigation }) => {
 
     if (selectedAction === actions.RECYCLE) {
       setUploading(true);
+      console.log('[AddWasteScreen] Creating Recycle Request. Current User ID:', authUser?.id);
       try {
         let imageUrl = null;
-        let imageUploadWarning = null;
 
         if (!authUser?.id) {
           throw new Error('User session not found');
         }
 
-        // Upload image first, but treat upload failures as non-blocking.
+        console.log('[AddWasteScreen] Image data:', image ? {
+          hasBase64: !!image.base64,
+          hasUri: !!image.uri,
+          mimeType: image.mimeType,
+        } : 'null');
+
+        // Upload image BEFORE navigating, so the URL is ready when user picks an institution
         if (image?.base64 || image?.uri) {
           const fileName = imageService.generateImageFileName(authUser.id);
+          console.log('[AddWasteScreen] Uploading image, filename:', fileName);
           const uploadRes = await imageService.uploadImageToStorage(fileName, image);
           if (uploadRes.error) {
-            imageUploadWarning = uploadRes.error;
-            console.warn('Image upload failed, creating request without image URL:', uploadRes.error);
+            console.warn('[AddWasteScreen] Image upload failed. Will continue without image.', uploadRes.error);
           } else {
             imageUrl = uploadRes.url;
+            console.log('[AddWasteScreen] Image uploaded. Public URL:', imageUrl);
           }
         }
 
-        // Find an available institution for pickup
-        const institutionsRes = await institutionService.listAvailableInstitutions(1);
-        const assignedInstitution = institutionsRes?.data?.[0] || null;
-
-        // Create pickup request with the uploaded image URL if available.
-        const requestRes = await pickupRequestService.createPickupRequest({
-          user_id: authUser.id,
-          institution_id: assignedInstitution?.id || null,
-          title,
-          category: selectedCategory,
-          condition,
-          image_url: imageUrl,
-          status: 'pending',
-        });
-
-        if (requestRes.error) {
-          throw requestRes.error;
-        }
-
         setUploading(false);
 
-        if (assignedInstitution) {
-          Alert.alert(
-            'Pickup Request Created',
-            imageUploadWarning
-              ? `Your pickup request has been assigned to ${assignedInstitution.name}.\n\nThe image upload failed, but your request was saved.\n\nYou earned ${points} points!`
-              : `Your pickup request has been assigned to ${assignedInstitution.name}.\n\nYou earned ${points} points!`
-          );
-        } else {
-          Alert.alert(
-            'Pickup Request Created',
-            imageUploadWarning
-              ? `Your request will be assigned when an institution is available.\n\nThe image upload failed, but your request was saved.\n\nYou earned ${points} points!`
-              : `Your request will be assigned when an institution is available.\n\nYou earned ${points} points!`
-          );
-        }
-
-        navigation.navigate('VendorDirectory', { item: createdItem, forPickup: true });
+        // Navigate to VendorDirectory — user selects which institution to send request to.
+        // The DB insert happens in VendorDetailScreen with the chosen institution_id.
+        navigation.navigate('VendorDirectory', {
+          item: createdItem,
+          forPickup: true,
+          pickupPayload: {
+            user_id: authUser.id,
+            title,
+            category: selectedCategory,
+            condition,
+            image_url: imageUrl,
+            status: 'pending',
+            points,
+          },
+        });
         return;
       } catch (e) {
         setUploading(false);
-        console.warn('Pickup request error:', e);
-        Alert.alert(
-          'Error',
-          e?.message || 'Unable to create pickup request. Please try again.'
-        );
+        console.warn('[AddWasteScreen] Error during pickup request setup:', e);
+        Alert.alert('Error', e?.message || 'Unable to create pickup request. Please try again.');
         return;
       }
     }

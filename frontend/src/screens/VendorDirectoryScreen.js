@@ -60,6 +60,8 @@ const VendorDirectoryScreen = ({ navigation, route }) => {
     navigation.navigate('VendorDetail', {
       vendor,
       fromRoute: route.params?.forPickup,
+      // Forward the pickupPayload from AddWasteScreen so VendorDetailScreen can create the DB row
+      pickupPayload: route.params?.pickupPayload || null,
     });
   };
 
