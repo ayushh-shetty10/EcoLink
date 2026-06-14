@@ -28,7 +28,7 @@ const AuthStack = () => (
 );
 
 function AppInner() {
-  const { user, role, loading, needsInstitutionProfile } = useAuth();
+  const { user, role, loading, needsInstitutionProfile, needsUserProfile } = useAuth();
 
   if (loading) return null;
 
@@ -37,7 +37,8 @@ function AppInner() {
       <UserContextProvider>
         <SafeAreaProvider>
           <NavigationContainer>
-            {user ? role === 'institution' ? <InstitutionNavigator needsProfileSetup={needsInstitutionProfile} /> : <RootNavigator /> : <AuthStack />}
+            {user ? role === 'institution' ? <InstitutionNavigator needsProfileSetup={needsInstitutionProfile} /> : <RootNavigator needsProfileSetup={needsUserProfile} /> : <AuthStack />
+            }
           </NavigationContainer>
         </SafeAreaProvider>
       </UserContextProvider>

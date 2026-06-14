@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Button from '../components/Button';
 import { Dropdown, Input } from '../components/Input';
@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
 import institutionService from '../services/institutionService';
 import pickupRequestService from '../services/pickupRequestService';
+import imageService from '../services/imageService';
 import { actions, colors, conditions, spacing, wasteCategories } from '../constants';
 
 const AddWasteScreen = ({ navigation }) => {
@@ -19,6 +20,7 @@ const AddWasteScreen = ({ navigation }) => {
   const [description, setDescription] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
   const [image, setImage] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   const availableActions = useMemo(() => {
     if (condition === 'working') {
@@ -41,16 +43,22 @@ const AddWasteScreen = ({ navigation }) => {
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
+      base64: true,
     });
 
     if (!result.canceled) {
-      setImage(result.assets[0].uri);
+      setImage(result.assets[0]);
     }
   };
 
   const handleSubmit = async () => {
     if (!title || !selectedCategory || !condition || !selectedAction) {
-      alert('Please fill all required fields.');
+      Alert.alert('Missing Fields', 'Please fill all required fields.');
+      return;
+    }
+
+    if (selectedAction === actions.RECYCLE && !image) {
+      Alert.alert('Image Required', 'Please select an image for recycling items.');
       return;
     }
 
@@ -60,7 +68,7 @@ const AddWasteScreen = ({ navigation }) => {
       condition,
       description,
       action: selectedAction,
-      image: image || '📦',
+      image: image?.uri || '📦',
     });
 
     let points = 0;
@@ -78,35 +86,78 @@ const AddWasteScreen = ({ navigation }) => {
     updateUserPoints(points);
 
     if (selectedAction === actions.RECYCLE) {
+      setUploading(true);
       try {
+        let imageUrl = null;
+        let imageUploadWarning = null;
+
+        if (!authUser?.id) {
+          throw new Error('User session not found');
+        }
+
+        // Upload image first, but treat upload failures as non-blocking.
+        if (image?.base64 || image?.uri) {
+          const fileName = imageService.generateImageFileName(authUser.id);
+          const uploadRes = await imageService.uploadImageToStorage(fileName, image);
+          if (uploadRes.error) {
+            imageUploadWarning = uploadRes.error;
+            console.warn('Image upload failed, creating request without image URL:', uploadRes.error);
+          } else {
+            imageUrl = uploadRes.url;
+          }
+        }
+
+        // Find an available institution for pickup
         const institutionsRes = await institutionService.listAvailableInstitutions(1);
         const assignedInstitution = institutionsRes?.data?.[0] || null;
 
-        if (authUser?.id) {
-          await pickupRequestService.createPickupRequest({
-            user_id: authUser.id,
-            institution_id: assignedInstitution?.id || null,
-            title,
-            category: selectedCategory,
-            condition,
-            image_url: image || null,
-            status: 'pending',
-          });
+        // Create pickup request with the uploaded image URL if available.
+        const requestRes = await pickupRequestService.createPickupRequest({
+          user_id: authUser.id,
+          institution_id: assignedInstitution?.id || null,
+          title,
+          category: selectedCategory,
+          condition,
+          image_url: imageUrl,
+          status: 'pending',
+        });
+
+        if (requestRes.error) {
+          throw requestRes.error;
         }
+
+        setUploading(false);
 
         if (assignedInstitution) {
-          alert(`Pickup request created and assigned to ${assignedInstitution.name}.`);
+          Alert.alert(
+            'Pickup Request Created',
+            imageUploadWarning
+              ? `Your pickup request has been assigned to ${assignedInstitution.name}.\n\nThe image upload failed, but your request was saved.\n\nYou earned ${points} points!`
+              : `Your pickup request has been assigned to ${assignedInstitution.name}.\n\nYou earned ${points} points!`
+          );
         } else {
-          alert('Pickup request created. It will be assigned when an institution is available.');
+          Alert.alert(
+            'Pickup Request Created',
+            imageUploadWarning
+              ? `Your request will be assigned when an institution is available.\n\nThe image upload failed, but your request was saved.\n\nYou earned ${points} points!`
+              : `Your request will be assigned when an institution is available.\n\nYou earned ${points} points!`
+          );
         }
+
+        navigation.navigate('VendorDirectory', { item: createdItem, forPickup: true });
+        return;
       } catch (e) {
-        alert('Unable to create pickup request right now. Please try again.');
+        setUploading(false);
+        console.warn('Pickup request error:', e);
+        Alert.alert(
+          'Error',
+          e?.message || 'Unable to create pickup request. Please try again.'
+        );
+        return;
       }
-      navigation.navigate('VendorDirectory', { item: createdItem, forPickup: true });
-      return;
     }
 
-    alert(`Item added successfully. You earned ${points} points.`);
+    Alert.alert('Success', `Item added successfully. You earned ${points} points.`);
     navigation.goBack();
   };
 
@@ -222,11 +273,12 @@ const AddWasteScreen = ({ navigation }) => {
         <Spacer size="xl" />
 
         <Button
-          title="Continue"
+          title={uploading ? 'Creating Pickup Request...' : 'Continue'}
           onPress={handleSubmit}
           variant="primary"
           size="large"
-          disabled={!selectedAction}
+          disabled={!selectedAction || uploading}
+          loading={uploading}
         />
 
         <Spacer size="sm" />

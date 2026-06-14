@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Button from '../components/Button';
-import { Container, Spacer } from '../components/Layout';
+import { BadgeCard } from '../components/Cards';
+import { Container, Divider, Spacer } from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { colors, spacing } from '../constants';
+import { badges, colors, spacing } from '../constants';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, profile, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+
+  const allBadges = useMemo(() => Object.values(badges), []);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [

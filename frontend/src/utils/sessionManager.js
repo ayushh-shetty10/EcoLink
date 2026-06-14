@@ -10,8 +10,13 @@ export function onAuthStateChange(callback) {
 }
 
 export async function getSession() {
-  const { data } = await supabase.auth.getSession();
-  return data.session || null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session || null;
+  } catch (error) {
+    console.warn('Unable to restore Supabase session at startup.', error);
+    return null;
+  }
 }
 
 export default { onAuthStateChange, getSession };

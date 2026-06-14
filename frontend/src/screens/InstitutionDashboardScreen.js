@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing } from '../constants';
 import { useAuth } from '../context/AuthContext';
 import institutionService from '../services/institutionService';
@@ -41,6 +42,12 @@ const InstitutionDashboardScreen = ({ navigation }) => {
   useEffect(() => {
     loadData();
   }, [user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [user?.id])
+  );
 
   const stats = useMemo(() => {
     const total = requests.length;

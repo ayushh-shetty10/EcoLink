@@ -16,6 +16,8 @@ import PickupRequestsScreen from '../screens/PickupRequestsScreen';
 import RequestDetailScreen from '../screens/RequestDetailScreen';
 import InstitutionProfileScreen from '../screens/InstitutionProfileScreen';
 import CreateInstitutionProfileScreen from '../screens/CreateInstitutionProfileScreen';
+import CreateUserProfileScreen from '../screens/CreateUserProfileScreen';
+import UpdateUserProfileScreen from '../screens/UpdateUserProfileScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -193,13 +195,26 @@ const BottomTabNavigator = () => {
   );
 };
 
-const RootNavigator = () => {
+const RootNavigator = ({ needsProfileSetup = false }) => {
   return (
-    <Stack.Navigator screenOptions={screenOptions}>
+    <Stack.Navigator
+      initialRouteName={needsProfileSetup ? 'CreateUserProfile' : 'Main'}
+      screenOptions={screenOptions}
+    >
+      <Stack.Screen
+        name="CreateUserProfile"
+        component={CreateUserProfileScreen}
+        options={{ headerShown: false, headerBackVisible: false }}
+      />
       <Stack.Screen
         name="Main"
         component={BottomTabNavigator}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="UpdateUserProfile"
+        component={UpdateUserProfileScreen}
+        options={{ title: 'Edit Profile', headerShown: true }}
       />
     </Stack.Navigator>
   );
@@ -245,4 +260,4 @@ const InstitutionNavigator = ({ needsProfileSetup = false }) => {
   );
 };
 
-export { RootNavigator, BottomTabNavigator, InstitutionNavigator };
+export { RootNavigator, BottomTabNavigator, InstitutionNavigator, ProfileStack, HomeStack, LeaderboardStack };

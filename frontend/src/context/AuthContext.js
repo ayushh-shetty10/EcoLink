@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [role, setRole] = useState('individual');
   const [needsInstitutionProfile, setNeedsInstitutionProfile] = useState(false);
+  const [needsUserProfile, setNeedsUserProfile] = useState(false);
   const [signupRole, setSignupRole] = useState('individual');
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +32,7 @@ export function AuthProvider({ children }) {
       email: baseUser.email,
       role: inferredRole,
       full_name: baseUser.email?.split('@')[0] || 'EcoLink User',
+      profile_completed: false,
     });
 
     if (!created.error && created.data) {
@@ -46,6 +48,7 @@ export function AuthProvider({ children }) {
       setProfile(null);
       setRole('individual');
       setNeedsInstitutionProfile(false);
+      setNeedsUserProfile(false);
       return;
     }
 
@@ -59,7 +62,14 @@ export function AuthProvider({ children }) {
     if (nextRole === 'institution') {
       const institution = await institutionService.getInstitutionById(baseUser.id);
       setNeedsInstitutionProfile(!!institution.error || !institution.data);
+      setNeedsUserProfile(false);
       return;
+    }
+
+    // Check profile completion for individual users
+    if (nextRole === 'individual') {
+      const isProfileComplete = fetchedProfile?.profile_completed === true;
+      setNeedsUserProfile(!isProfileComplete);
     }
 
     setNeedsInstitutionProfile(false);
@@ -75,23 +85,40 @@ export function AuthProvider({ children }) {
     setNeedsInstitutionProfile(!!institution.error || !institution.data);
   };
 
+  const refreshUserProfileStatus = async () => {
+    if (!user?.id || role !== 'individual') {
+      setNeedsUserProfile(false);
+      return;
+    }
+
+    const res = await profileService.getProfileById(user.id);
+    if (!res.error && res.data) {
+      setNeedsUserProfile(res.data.profile_completed !== true);
+    }
+  };
+
   useEffect(() => {
     let unsubscribe;
 
     async function init() {
       setLoading(true);
-      const s = await sessionManager.getSession();
-      if (s) {
-        setSession(s);
-        await hydrateSessionUser(s.user || null);
+
+      try {
+        const s = await sessionManager.getSession();
+        if (s) {
+          setSession(s);
+          await hydrateSessionUser(s.user || null);
+        }
+
+        unsubscribe = sessionManager.onAuthStateChange(async (event, newSession) => {
+          setSession(newSession?.session ?? newSession);
+          await hydrateSessionUser(newSession?.session?.user ?? newSession?.user ?? null);
+        });
+      } catch (error) {
+        console.warn('Auth bootstrap failed; continuing without a persisted session.', error);
+      } finally {
+        setLoading(false);
       }
-
-      unsubscribe = sessionManager.onAuthStateChange(async (event, newSession) => {
-        setSession(newSession?.session ?? newSession);
-        await hydrateSessionUser(newSession?.session?.user ?? newSession?.user ?? null);
-      });
-
-      setLoading(false);
     }
 
     init();
@@ -112,6 +139,7 @@ export function AuthProvider({ children }) {
         email,
         role: roleToPersist,
         full_name: email.split('@')[0],
+        profile_completed: false,
       });
     }
 
@@ -138,6 +166,7 @@ export function AuthProvider({ children }) {
     setProfile(null);
     setRole('individual');
     setNeedsInstitutionProfile(false);
+    setNeedsUserProfile(false);
     setLoading(false);
   }
 
@@ -149,6 +178,7 @@ export function AuthProvider({ children }) {
         profile,
         role,
         needsInstitutionProfile,
+        needsUserProfile,
         signupRole,
         setSignupRole,
         loading,
@@ -156,6 +186,7 @@ export function AuthProvider({ children }) {
         signUp,
         signOut,
         refreshInstitutionStatus,
+        refreshUserProfileStatus,
       }}
     >
       {children}
